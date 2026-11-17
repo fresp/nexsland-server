@@ -56,16 +56,31 @@ func (s *Server) mcpHandler() http.Handler {
 	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, &mcp.StreamableHTTPOptions{
 		Stateless:    true,
 		JSONResponse: true,
-		// Every request carries a bearer token bound to this resource, which
-		// is what defeats DNS rebinding here. The built-in check would reject
-		// a reverse proxy on the same host (loopback peer, public Host header).
+		// checkOrigin below covers DNS rebinding (spec: validate Origin), and
+		// every request needs a bearer token bound to this resource. The SDK's
+		// Host-based check would reject a reverse proxy on the same host
+		// (loopback peer, public Host header).
 		DisableLocalhostProtection: true,
 		MaxRequestBodyBytes:        256 << 10,
 	})
-	return auth.RequireBearerToken(s.verifyAccessToken, &auth.RequireBearerTokenOptions{
+	return s.checkOrigin(auth.RequireBearerToken(s.verifyAccessToken, &auth.RequireBearerTokenOptions{
 		ResourceMetadataURL: s.resourceMetadataURL(),
 		Scopes:              []string{scopeTodos},
-	})(h)
+	})(h))
+}
+
+// checkOrigin implements the Streamable HTTP rule that a present but invalid
+// Origin header gets 403. Server-side clients such as Claude send no Origin;
+// browsers do, and only this server's own origin is accepted.
+func (s *Server) checkOrigin(next http.Handler) http.Handler {
+	own := s.cfg.PublicURL.Scheme + "://" + s.cfg.PublicURL.Host
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if o := r.Header.Get("Origin"); o != "" && !strings.EqualFold(o, own) {
+			apiError(w, http.StatusForbidden, "forbidden_origin", "cross-origin requests are not allowed")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // NewMCPServer builds the MCP server with the todo tools.
