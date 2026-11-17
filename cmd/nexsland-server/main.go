@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -28,6 +29,7 @@ const usage = `Usage:
   nexsland-server owner set-password            set the owner password (reads stdin)
   nexsland-server oauth-client add NAME URI...  pre-register a public OAuth client
   nexsland-server migrate                       apply database migrations and exit
+  nexsland-server healthcheck                   probe /healthz on NEXSLAND_LISTEN (for Docker)
   nexsland-server version
 
 Configuration comes from the environment; see README.md.
@@ -81,6 +83,8 @@ func run(args []string) error {
 		fmt.Println("client_id:", id)
 		fmt.Println("Public client: leave the client secret empty.")
 		return nil
+	case "healthcheck":
+		return healthcheck()
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 		return nil
@@ -184,4 +188,26 @@ func serve() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// healthcheck lets a distroless container probe itself without curl.
+func healthcheck() error {
+	listen := os.Getenv("NEXSLAND_LISTEN")
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		return fmt.Errorf("NEXSLAND_LISTEN: %w", err)
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	c := &http.Client{Timeout: 3 * time.Second}
+	res, err := c.Get("http://" + net.JoinHostPort(host, port) + "/healthz")
+	if err != nil {
+		return err
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("healthz returned %d", res.StatusCode)
+	}
+	return nil
 }
