@@ -1,0 +1,85 @@
+{{define "login"}}{{template "top" .}}
+<h1>Sign in</h1>
+<div class="card">
+{{if .NoPassword}}
+<p class="error">No owner password is set. Run <strong>nexsland-server owner set-password</strong> on the server first.</p>
+{{else}}
+<form method="post" action="/login">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<input type="hidden" name="next" value="{{.Next}}">
+<label for="password">Owner password</label>
+<input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+<div class="actions"><button class="primary" type="submit">Sign in</button></div>
+</form>
+{{end}}
+</div>
+{{template "bottom" .}}{{end}}
+
+{{define "nav"}}<nav><strong>Nexsland Server</strong>
+<form method="post" action="/logout"><input type="hidden" name="csrf" value="{{.CSRF}}"><button type="submit">Sign out</button></form></nav>{{end}}
+
+{{define "dashboard"}}{{template "top" .}}
+{{template "nav" .}}
+<div class="actions" style="margin-top:0;margin-bottom:16px"><a class="btn primary" href="/pair">Pair a Nexsland device</a></div>
+<h2>Paired devices</h2>
+<div class="card">
+{{range .Devices}}<div class="row"><div>{{.Name}}<div class="muted">Paired {{fmtTime .CreatedAt}}{{if .LastSeenAt}} · last sync {{fmtTime .LastSeenAt}}{{end}}</div></div>
+<form method="post" action="/devices/{{.ID}}/revoke"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="danger" type="submit">Revoke</button></form></div>
+{{else}}<p class="muted">No devices yet.</p>{{end}}
+</div>
+<h2>Connected clients</h2>
+<div class="card">
+{{range .Grants}}<div class="row"><div>{{.ClientName}}<div class="muted">Connected {{fmtTime .CreatedAt}}{{if .LastUsedAt}} · last used {{fmtTime .LastUsedAt}}{{end}}</div></div>
+<form method="post" action="/clients/{{.ID}}/revoke"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="danger" type="submit">Revoke</button></form></div>
+{{else}}<p class="muted">No connected clients. Add this server as a custom connector in Claude.</p>{{end}}
+</div>
+<p class="muted">Version {{.Version}}</p>
+{{template "bottom" .}}{{end}}
+
+{{define "pair"}}{{template "top" .}}
+{{template "nav" .}}
+<h1>Pair a device</h1>
+<div class="card">
+{{if .Pair}}
+<p>Device <strong>{{.Pair.DeviceName}}</strong> wants to sync your todos.</p>
+<p>Code <code>{{.Pair.UserCode}}</code>. Check it matches the code shown in Nexsland.</p>
+<form method="post" action="/pair">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<input type="hidden" name="code" value="{{.Pair.UserCode}}">
+<div class="actions"><button class="primary" name="decision" value="approve" type="submit">Approve</button>
+<button name="decision" value="deny" type="submit">Deny</button></div>
+</form>
+{{else if .Done}}
+<p>{{.Done}}</p>
+<div class="actions"><a class="btn" href="/">Back</a></div>
+{{else}}
+<form method="get" action="/pair">
+<label for="code">Code shown in Nexsland</label>
+<input id="code" name="code" type="text" autocomplete="off" autocapitalize="characters" placeholder="BCDF-GHJK" required autofocus>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+<div class="actions"><button class="primary" type="submit">Continue</button></div>
+</form>
+{{end}}
+</div>
+{{template "bottom" .}}{{end}}
+
+{{define "consent"}}{{template "top" .}}
+{{template "nav" .}}
+<h1>Connect {{.ClientName}}?</h1>
+<div class="card">
+<p><strong>{{.ClientName}}</strong> wants to read and change your todos.</p>
+<p class="muted">It will be sent back to <strong>{{.RedirectHost}}</strong>. The name above is chosen by the client itself; only approve if you just started connecting it.</p>
+<form method="post" action="/oauth/authorize">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+{{range $k, $v := .Params}}<input type="hidden" name="{{$k}}" value="{{$v}}">
+{{end}}<div class="actions"><button class="primary" name="decision" value="approve" type="submit">Allow</button>
+<button name="decision" value="deny" type="submit">Deny</button></div>
+</form>
+</div>
+{{template "bottom" .}}{{end}}
+
+{{define "message"}}{{template "top" .}}
+<h1>{{.Title}}</h1>
+<div class="card"><p>{{.Message}}</p></div>
+{{template "bottom" .}}{{end}}
