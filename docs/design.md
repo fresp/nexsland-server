@@ -165,7 +165,9 @@ writes go through the same store path as sync writes and bump `seq`.
 ## Storage
 
 SQLite through `modernc.org/sqlite` (pure Go, no CGO), WAL, `busy_timeout`,
-foreign keys on, one connection for writes. Numbered SQL migrations are
+foreign keys on, a single pooled connection (one owner's load needs no more).
+The server process is the only long-running writer; the admin CLI commands
+make short writes that SQLite's locking serializes. Numbered SQL migrations are
 embedded and applied on start inside a transaction; `schema_migrations`
 records the version. Every user-data table has a `user_id`; this build creates
 a single owner (id 1) and has no sign-up.
