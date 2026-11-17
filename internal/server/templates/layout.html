@@ -1,0 +1,39 @@
+{{define "top"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>{{.Title}} · Nexsland Server</title>
+<style>
+:root { color-scheme: light dark; --fg: #1d1d1f; --bg: #f6f6f7; --card: #fff; --muted: #6b6b70; --line: #e2e2e6; --accent: #3a5ccc; --danger: #c0392b; }
+@media (prefers-color-scheme: dark) { :root { --fg: #ececf1; --bg: #16161a; --card: #202026; --muted: #9a9aa3; --line: #2f2f37; --accent: #8aa4ff; --danger: #ff7b6b; } }
+* { box-sizing: border-box; }
+body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+main { max-width: 640px; margin: 0 auto; padding: 32px 16px; }
+h1 { font-size: 1.4rem; margin: 0 0 16px; }
+h2 { font-size: 1.05rem; margin: 24px 0 8px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+.muted { color: var(--muted); font-size: .9rem; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+label { display: block; font-weight: 600; margin-bottom: 6px; }
+input[type=password], input[type=text] { width: 100%; padding: 10px 12px; font: inherit; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); }
+button, a.btn { font: inherit; text-decoration: none; display: inline-block; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
+button.primary, a.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.danger { color: var(--danger); }
+.actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.error { color: var(--danger); }
+code { font-size: 1.3rem; letter-spacing: .1em; }
+nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+nav form { margin: 0; }
+</style>
+</head>
+<body>
+<main>
+{{end}}
+
+{{define "bottom"}}</main>
+</body>
+</html>
+{{end}}

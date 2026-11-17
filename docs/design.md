@@ -6,60 +6,76 @@ Nexsland GNOME Shell extension. One owner per deployment.
 
 ## Verified requirements and sources
 
-Checked on 2026-11-17. The session that wrote this could not open
-`modelcontextprotocol.io` or `claude.com` directly (blocked by its network
-policy), so the claims below come from the official MCP Go SDK source and docs
-(fetched through the Go module proxy) and from web search results quoting the
-official pages. Items marked *secondary* were not confirmed against an official
-page and should be re-checked when those hosts are reachable.
+Read on 2026-11-17 from the official pages (Markdown versions fetched directly).
 
-**Claude custom connectors** (support.claude.com article 11503834
-"Building custom connectors via remote MCP servers", article 11175166 "Get
-started with custom connectors using remote MCP", claude.com/docs/connectors,
-via search results):
+**Claude custom connectors**
+([claude.com/docs/connectors/building/authentication](https://claude.com/docs/connectors/building/authentication),
+[claude.com/docs/connectors/custom/add-unlisted](https://claude.com/docs/connectors/custom/add-unlisted)):
 
-- Remote MCP over Streamable HTTP (SSE is legacy). Available on web, desktop,
-  iOS and Android once added on claude.ai.
-- Auth is either none or OAuth. For OAuth the connector dialog offers three
-  client modes: "Use Claude's published identity" (Client ID Metadata
-  Document), "Register automatically" (Dynamic Client Registration, RFC 7591)
-  and "Use your own OAuth client" (pre-registered client ID, optional secret).
-- Callback URL is `https://claude.ai/api/mcp/auth_callback`; Anthropic says it
-  may move to `https://claude.com/api/mcp/auth_callback`, so allow both.
-  Client name is "Claude".
-- *Secondary:* PKCE S256 is required (Claude refuses an authorization server
-  that does not advertise it); sign-in starts from a 401 with
-  `WWW-Authenticate`; only the first `authorization_servers` entry is used;
-  discovery, registration and token endpoints must answer within 10 s.
+- The same auth stack serves claude.ai, Desktop, mobile, Claude Code and Cowork.
+- Auth types for a custom connector: OAuth (CIMD "Use Claude's published
+  identity", DCR "Register automatically", or "Use your own OAuth client" with
+  an optional secret), or none. Static request headers are a limited beta.
+- Claude selects CIMD only when the authorization server metadata advertises
+  `client_id_metadata_document_supported: true` and `none` in
+  `token_endpoint_auth_methods_supported`; otherwise it falls back to DCR,
+  which needs a `registration_endpoint`. DCR registers Claude as a public client.
+- Sign-in starts only from a `401` with `WWW-Authenticate: Bearer
+  resource_metadata="…"`; without the pointer Claude probes
+  `/.well-known/oauth-protected-resource/<path>` then the root form.
+- The metadata `resource` must equal the URL the user enters, path included.
+  Only the first `authorization_servers` entry is used. The authorization
+  server must serve RFC 8414 or OIDC discovery metadata.
+- PKCE S256 on every request; the server must support it and advertise
+  `code_challenge_methods_supported: ["S256"]`.
+- Scopes: Claude requests the `scope` from the 401 header, else
+  `scopes_supported` from the resource metadata, and appends `offline_access`
+  only if the authorization server lists it.
+- Callback for hosted apps (web, Desktop, mobile, Cowork):
+  `https://claude.ai/api/mcp/auth_callback`. Claude Code uses a loopback
+  redirect on an ephemeral port: match `localhost` and `127.0.0.1` ignoring
+  the port. The consent screen must show the redirect host.
+- Token endpoint: `application/x-www-form-urlencoded`; expired refresh tokens
+  answer `invalid_grant`; public-client refresh tokens rotate, with the new one
+  in the same response. Discovery, registration and token endpoints must answer
+  within 10 s, refresh within 30 s. Claude refreshes on 401 and up to 5 minutes
+  before expiry.
+- Anthropic's egress range is `160.79.104.0/21`.
 
-**MCP specification** (current revision 2025-11-25, with 2026-07-28 also
-present in the SDK; authorization and transports pages, via the SDK docs and
-search results):
+**MCP specification.** The current revision is
+[2026-07-28](https://modelcontextprotocol.io/specification/versioning); the
+SDK and Claude also speak 2025-11-25.
+([authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization),
+[client registration](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration),
+[Streamable HTTP](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http),
+and the [2025-11-25 authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization) page):
 
-- Authorization is optional and HTTP-only. When present: OAuth 2.1, the MCP
-  server is a resource server and MUST serve Protected Resource Metadata
-  (RFC 9728) listing at least one authorization server, and return 401 with
-  `WWW-Authenticate: Bearer resource_metadata="…"`.
-- Clients discover the authorization server through RFC 8414 or OpenID
-  Connect discovery. PKCE with S256 is mandatory and the server must advertise
-  `code_challenge_methods_supported`.
-- Client registration: Client ID Metadata Documents are the preferred path in
-  2025-11-25, DCR is MAY, pre-registration is allowed.
-- Resource indicators (RFC 8707 `resource`) are sent by clients; the server
-  must only accept tokens issued for itself (no token passthrough).
-- Streamable HTTP: one endpoint taking POST (and GET/DELETE for sessions),
-  JSON or SSE responses, `Mcp-Session-Id`, `MCP-Protocol-Version`. The
-  2026-07-28 revision adds a stateless mode without sessions.
+- Authorization servers implement OAuth 2.1. MCP servers MUST serve Protected
+  Resource Metadata (RFC 9728) with at least one authorization server, and
+  SHOULD put `scope` in `WWW-Authenticate`.
+- Authorization servers MUST provide RFC 8414 or OIDC discovery and MUST
+  validate exact redirect URIs. Redirect URIs MUST be localhost or HTTPS.
+- Clients MUST send `resource` (RFC 8707) in authorization and token
+  requests; servers MUST only accept tokens issued for themselves.
+- Public-client refresh tokens MUST rotate; access tokens SHOULD be short-lived.
+- Authorization servers SHOULD send `iss` in authorization responses
+  (RFC 9207), expected to become MUST.
+- Client registration: CIMD SHOULD be supported; DCR is **deprecated** in
+  2026-07-28 but still a valid fallback; pre-registration is allowed.
+- Resource servers SHOULD NOT advertise `offline_access`.
+- Streamable HTTP: servers MUST validate `Origin` and answer 403 when it is
+  present and invalid. 2026-07-28 removes protocol sessions: ignore
+  `Mcp-Session-Id`, and GET may answer 405.
 
 **MCP Go SDK** (`github.com/modelcontextprotocol/go-sdk` v1.8.0, `docs/protocol.md`,
 `auth/auth.go`, `mcp/streamable.go`):
 
 - Stable: v1.x with semver since v1.0.0; requires Go 1.25.
 - Server side provides `mcp.NewStreamableHTTPHandler` (with `Stateless`,
-  `JSONResponse`, `MaxRequestBodyBytes`, localhost DNS-rebinding protection),
-  `auth.RequireBearerToken` (sets `WWW-Authenticate` with the resource
-  metadata URL, checks scopes and expiry, binds sessions to `TokenInfo.UserID`)
-  and `auth.ProtectedResourceMetadataHandler`.
+  required for 2026-07-28, `JSONResponse`, `MaxRequestBodyBytes`, a Host-based
+  DNS-rebinding check), `auth.RequireBearerToken` (sets `WWW-Authenticate` with
+  the resource metadata URL and `scope`, checks scopes and expiry) and
+  `auth.ProtectedResourceMetadataHandler`.
 - It does **not** ship an authorization server. The authorize, token,
   registration and revocation endpoints are implemented here.
 - Decision: use the official SDK. No alternative needed.
@@ -71,9 +87,12 @@ search results):
   pre-registered clients created with `nexsland-server oauth-client add`.
   Client ID Metadata Documents are **not** supported: they require the server
   to fetch the client's URL, which breaks the "no outbound network calls"
-  rule. The authorization server metadata says so
-  (`client_id_metadata_document_supported: false`). Users pick "Register
-  automatically" in the Claude dialog.
+  rule. The metadata says `client_id_metadata_document_supported: false`, so
+  Claude falls back to DCR on its own; in the custom connector dialog the user
+  picks "Register automatically". DCR is deprecated in MCP 2026-07-28, so this
+  is the first thing to revisit if Claude ever drops it.
+- Redirect URIs match exactly, except http loopback URIs, which match
+  ignoring the port (RFC 8252 §7.3) so Claude Code's ephemeral ports work.
 - Access tokens are opaque, 1 hour, bound to the resource `<public>/mcp`.
   Refresh tokens rotate on every use; reuse of a rotated refresh token or of
   an authorization code revokes the whole grant. A grant is what the owner
@@ -148,7 +167,8 @@ All under `/v1`, JSON, `Authorization: Bearer <device token>`.
 
 `POST <public>/mcp`, Streamable HTTP, stateless (no `Mcp-Session-Id`;
 required for protocol 2026-07-28 and fine for older clients because the tools
-need no server-to-client requests). Tools:
+need no server-to-client requests). A present `Origin` header other than the
+server's own origin gets 403. Tools:
 
 - `add_todo(title, date?, time?)`
 - `list_todos(from?, to?, include_done?)`: default today..today+7 plus overdue
@@ -165,7 +185,9 @@ writes go through the same store path as sync writes and bump `seq`.
 ## Storage
 
 SQLite through `modernc.org/sqlite` (pure Go, no CGO), WAL, `busy_timeout`,
-foreign keys on, one connection for writes. Numbered SQL migrations are
+foreign keys on, a single pooled connection (one owner's load needs no more).
+The server process is the only long-running writer; the admin CLI commands
+make short writes that SQLite's locking serializes. Numbered SQL migrations are
 embedded and applied on start inside a transaction; `schema_migrations`
 records the version. Every user-data table has a `user_id`; this build creates
 a single owner (id 1) and has no sign-up.
@@ -181,11 +203,13 @@ only when the TCP peer is a loopback or private address (the reverse proxy).
 
 ## Open risks
 
-- Claude's default connector mode may be "Use Claude's published identity"
-  (CIMD). This server rejects it; the user must choose "Register
-  automatically" or a pre-registered client. Unverified how Claude reacts if
-  the user leaves the default.
-- Official Claude and MCP pages were not read directly (see first section).
+- If the user picks "Use Claude's published identity" in the connector dialog,
+  sign-in fails because this server does not do CIMD; the README says to pick
+  "Register automatically".
+- DCR is deprecated in MCP 2026-07-28. Claude still supports it today.
+- Refresh-token reuse revokes the grant. If Claude retries a refresh whose
+  response was lost (timeout, proxy), the owner has to reconnect the
+  connector. Chosen for safety; a short grace window would trade some of it away.
 - DCR is open by design. Anyone can register a client, but it gets nothing
   without the owner's consent. Unused registrations are pruned after 24 h and
   registration is rate limited.
