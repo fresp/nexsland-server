@@ -84,7 +84,7 @@ Custom connectors are added on claude.ai and then work in the Claude apps too.
    does not support "Use Claude's published identity" (Client ID Metadata Documents),
    because that would require it to fetch a URL from the internet. If automatic
    registration is not offered, run
-   `nexsland-server oauth-client add Claude https://claude.ai/api/mcp/auth_callback https://claude.com/api/mcp/auth_callback`
+   `nexsland-server oauth-client add Claude https://claude.ai/api/mcp/auth_callback`
    and choose **Use your own OAuth client** with the printed client ID and an empty secret.
 4. Click **Connect**. You are sent to your server: sign in, check that the consent
    page says it returns to `claude.ai`, and click **Allow**.

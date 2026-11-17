@@ -44,6 +44,8 @@ curl -s https://nexsland.fresp.my.id/.well-known/oauth-protected-resource/mcp
 
 The last command must print JSON with `"resource":"https://nexsland.fresp.my.id/mcp"`.
 On nginx older than 1.25.1, replace `http2 on;` with `listen 443 ssl http2;`.
+If a firewall or WAF sits in front, allow Anthropic's egress range
+`160.79.104.0/21`: Claude's discovery, token and MCP calls come from there.
 
 ## 4. Owner password
 
@@ -64,7 +66,7 @@ At least 12 characters. Then open https://nexsland.fresp.my.id/ and sign in.
    Connected clients.
 
 If step 3 has no "Register automatically" option or connecting fails, run
-`docker compose exec nexsland nexsland-server oauth-client add Claude https://claude.ai/api/mcp/auth_callback https://claude.com/api/mcp/auth_callback`
+`docker compose exec nexsland nexsland-server oauth-client add Claude https://claude.ai/api/mcp/auth_callback`
 and use "Use your own OAuth client" with that client ID and no secret.
 
 ## 6. Test from Claude mobile
