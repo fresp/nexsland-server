@@ -1,0 +1,23 @@
+# Example deployment. Put nginx (deploy/nginx.conf) in front for TLS.
+services:
+  nexsland:
+    image: ghcr.io/fresp/nexsland-server:latest
+    build: .
+    restart: unless-stopped
+    environment:
+      NEXSLAND_PUBLIC_URL: https://nexsland.example.com
+      NEXSLAND_TZ: Asia/Jakarta
+      NEXSLAND_DB: /data/nexsland.db
+      NEXSLAND_LISTEN: :8080
+      NEXSLAND_LOG_LEVEL: info
+    volumes:
+      - nexsland-data:/data
+    # Only the local reverse proxy should reach it.
+    ports:
+      - "127.0.0.1:8080:8080"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+volumes:
+  nexsland-data:
