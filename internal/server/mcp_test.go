@@ -442,3 +442,49 @@ func TestRegistrationValidation(t *testing.T) {
 		t.Fatalf("good secret, bad refresh: %d %s", r.status, r.body)
 	}
 }
+
+func TestMCPOriginValidation(t *testing.T) {
+	e := newEnv(t)
+	_, tok := e.connectClaude(e.login())
+	post := func(origin string) int {
+		req, _ := http.NewRequest("POST", e.ts.URL+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		req.Header.Set("Authorization", "Bearer "+tok.AccessToken)
+		if origin != "" {
+			req.Header.Set("Origin", origin)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res.StatusCode
+	}
+	if c := post("https://evil.example"); c != 403 {
+		t.Fatalf("foreign origin: %d", c)
+	}
+	if c := post(e.ts.URL); c == 403 {
+		t.Fatal("own origin rejected")
+	}
+	if c := post(""); c == 403 {
+		t.Fatal("no origin rejected")
+	}
+}
+
+func TestLoopbackRedirectIgnoresPort(t *testing.T) {
+	reg := []string{"http://localhost/callback", "https://claude.ai/api/mcp/auth_callback"}
+	for got, want := range map[string]bool{
+		"http://localhost:3118/callback":              true,
+		"http://localhost/callback":                   true,
+		"http://127.0.0.1:3118/callback":              false, // different host than registered
+		"http://localhost:3118/other":                 false,
+		"https://claude.ai/api/mcp/auth_callback":     true,
+		"https://claude.ai:444/api/mcp/auth_callback": false,
+		"http://evil.example:3118/callback":           false,
+	} {
+		if redirectAllowed(reg, got) != want {
+			t.Errorf("%s: want %v", got, want)
+		}
+	}
+}

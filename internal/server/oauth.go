@@ -106,6 +106,26 @@ func validRedirectURI(raw string) bool {
 	return u.Scheme == "https" || (u.Scheme == "http" && config.IsLoopbackHost(u.Hostname()))
 }
 
+// redirectAllowed matches redirect URIs exactly, except that for http
+// loopback URIs the port is ignored (RFC 8252 §7.3): native clients such as
+// Claude Code listen on an ephemeral port per session.
+func redirectAllowed(registered []string, got string) bool {
+	if slices.Contains(registered, got) {
+		return true
+	}
+	g, err := url.Parse(got)
+	if err != nil || g.Scheme != "http" || !config.IsLoopbackHost(g.Hostname()) {
+		return false
+	}
+	for _, r := range registered {
+		u, err := url.Parse(r)
+		if err == nil && u.Scheme == "http" && u.Hostname() == g.Hostname() && u.Path == g.Path && u.RawQuery == g.RawQuery {
+			return true
+		}
+	}
+	return false
+}
+
 type registerRequest struct {
 	ClientName              string   `json:"client_name"`
 	RedirectURIs            []string `json:"redirect_uris"`
@@ -245,7 +265,7 @@ func (s *Server) parseAuthz(r *http.Request, get func(string) string) (authzRequ
 	if a.redirectURI == "" && len(c.RedirectURIs) == 1 {
 		a.redirectURI = c.RedirectURIs[0]
 	}
-	if !slices.Contains(c.RedirectURIs, a.redirectURI) {
+	if !redirectAllowed(c.RedirectURIs, a.redirectURI) {
 		return a, errNoRedirect{"The redirect URI is not registered for this client."}
 	}
 	a.state = get("state")
