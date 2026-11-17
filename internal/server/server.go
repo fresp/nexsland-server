@@ -34,6 +34,8 @@ type Server struct {
 	loginIP     *limiter
 	loginGlobal *rate.Limiter
 	pairIP      *limiter
+	registerIP  *limiter
+	tokenIP     *limiter
 }
 
 // New builds a Server. now may be nil (wall clock).
@@ -49,6 +51,8 @@ func New(cfg *config.Config, st *store.Store, log *slog.Logger, now func() time.
 		loginIP:     newLimiter(rate.Every(12*time.Second), 5),
 		loginGlobal: rate.NewLimiter(rate.Every(2*time.Second), 20),
 		pairIP:      newLimiter(rate.Every(6*time.Second), 10),
+		registerIP:  newLimiter(rate.Every(3*time.Minute), 10),
+		tokenIP:     newLimiter(rate.Every(time.Second), 30),
 	}
 }
 
@@ -67,6 +71,15 @@ func (s *Server) Handler() http.Handler {
 		apiError(w, http.StatusNotFound, "not_found", "no such endpoint")
 	})
 
+	// OAuth authorization server and protected resource metadata (Claude).
+	mux.HandleFunc("GET /.well-known/oauth-protected-resource", s.resourceMetadata)
+	mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", s.resourceMetadata)
+	mux.HandleFunc("GET /.well-known/oauth-authorization-server", s.authServerMetadata)
+	mux.HandleFunc("POST /oauth/register", s.register)
+	mux.HandleFunc("POST /oauth/token", s.token)
+	mux.HandleFunc("POST /oauth/revoke", s.revoke)
+	mux.Handle("/mcp", s.mcpHandler())
+
 	// Owner web pages: cookie session, CSRF token, Fetch-metadata check.
 	web := http.NewServeMux()
 	web.HandleFunc("GET /login", s.loginPage)
@@ -77,9 +90,11 @@ func (s *Server) Handler() http.Handler {
 	web.Handle("POST /clients/{id}/revoke", s.requireOwner(s.revokeClient))
 	web.Handle("GET /pair", s.requireOwner(s.pairPage))
 	web.Handle("POST /pair", s.requireOwner(s.pairDecide))
+	web.Handle("GET /oauth/authorize", s.requireOwner(s.authorizePage))
+	web.Handle("POST /oauth/authorize", s.requireOwner(s.authorizeDecide))
 	cop := http.NewCrossOriginProtection()
 	webHandler := cop.Handler(web)
-	for _, p := range []string{"/login", "/logout", "/{$}", "/devices/", "/clients/", "/pair"} {
+	for _, p := range []string{"/login", "/logout", "/{$}", "/devices/", "/clients/", "/pair", "/oauth/authorize"} {
 		mux.Handle(p, webHandler)
 	}
 
@@ -308,4 +323,12 @@ func jsonErrMsg(err error) string {
 		return "malformed JSON"
 	}
 	return "malformed JSON"
+}
+
+// decodeLenient reads a size-limited JSON body, ignoring unknown fields.
+func decodeLenient(w http.ResponseWriter, r *http.Request, max int64, v any) error {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, max)).Decode(v); err != nil {
+		return errors.New("invalid JSON body: " + jsonErrMsg(err))
+	}
+	return nil
 }

@@ -26,6 +26,7 @@ import (
 const usage = `Usage:
   nexsland-server serve                         run the server (default)
   nexsland-server owner set-password            set the owner password (reads stdin)
+  nexsland-server oauth-client add NAME URI...  pre-register a public OAuth client
   nexsland-server migrate                       apply database migrations and exit
   nexsland-server version
 
@@ -64,6 +65,22 @@ func run(args []string) error {
 			return errors.New("usage: nexsland-server owner set-password")
 		}
 		return setPassword()
+	case "oauth-client":
+		if len(args) < 3 || args[0] != "add" {
+			return errors.New("usage: nexsland-server oauth-client add NAME REDIRECT_URI...")
+		}
+		st, err := openStore()
+		if err != nil {
+			return err
+		}
+		defer st.Close()
+		id, err := server.NewCLIClient(context.Background(), st, args[1], args[2:])
+		if err != nil {
+			return err
+		}
+		fmt.Println("client_id:", id)
+		fmt.Println("Public client: leave the client secret empty.")
+		return nil
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 		return nil

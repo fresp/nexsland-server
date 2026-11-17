@@ -34,7 +34,7 @@
 <form method="post" action="/clients/{{.ID}}/revoke"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="danger" type="submit">Revoke</button></form></div>
 {{else}}<p class="muted">No connected clients. Add this server as a custom connector in Claude.</p>{{end}}
 </div>
-<p class="muted">Version {{.Version}}</p>
+<p class="muted">MCP endpoint: {{.MCPURL}} · version {{.Version}}</p>
 {{template "bottom" .}}{{end}}
 
 {{define "pair"}}{{template "top" .}}

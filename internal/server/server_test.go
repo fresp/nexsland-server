@@ -312,6 +312,13 @@ func TestAuthRejection(t *testing.T) {
 			}
 		}
 	}
+	// Device tokens do not open the MCP endpoint, and vice versa.
+	b := e.login()
+	dev := e.pair(b, "d")
+	r := e.do(nil, "POST", "/mcp", dev, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+	if r.status != 401 || !strings.Contains(r.header.Get("WWW-Authenticate"), "resource_metadata=") {
+		t.Fatalf("mcp with device token: %d %v", r.status, r.header)
+	}
 	// Wrong password.
 	jar, _ := cookiejar.New(nil)
 	c := noRedirect(jar)

@@ -199,7 +199,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, http.StatusOK, "dashboard", map[string]any{
 		"Title": "Devices and clients", "CSRF": sess.CSRF, "Devices": devices, "Grants": grants,
-		"Version": Version,
+		"MCPURL": s.resourceURI(), "Version": Version,
 	})
 }
 
